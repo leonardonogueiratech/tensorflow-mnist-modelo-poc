@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TensorFlow POC - Reconhecimento de Digitos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: #888;
+            font-size: 1.1rem;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .card h2 {
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+            color: #00d4ff;
+        }
+
+        .canvas-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #canvas {
+            background: #fff;
+            border-radius: 15px;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, #00d4ff, #0099cc);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .result-display {
+            text-align: center;
+        }
+
+        .predicted-digit {
+            font-size: 8rem;
+            font-weight: bold;
+            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1;
+            margin: 20px 0;
+        }
+
+        .confidence {
+            font-size: 1.5rem;
+            color: #00d4ff;
+            margin-bottom: 30px;
+        }
+
+        .probability-bars {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .prob-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .prob-label {
+            width: 20px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .prob-bar-container {
+            flex: 1;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .prob-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+            border-radius: 10px;
+            transition: width 0.5s ease;
+        }
+
+        .prob-value {
+            width: 50px;
+            text-align: right;
+            font-size: 0.9rem;
+            color: #888;
+        }
+
+        .instructions {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(0, 212, 255, 0.1);
+            border-radius: 15px;
+            border-left: 4px solid #00d4ff;
+        }
+
+        .instructions h3 {
+            margin-bottom: 10px;
+            color: #00d4ff;
+        }
+
+        .instructions ul {
+            margin-left: 20px;
+            color: #aaa;
+        }
+
+        .instructions li {
+            margin: 5px 0;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .placeholder {
+            color: #666;
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Reconhecimento de Digitos</h1>
+            <p class="subtitle">Desenhe um numero de 0 a 9 e veja a IA reconhecer!</p>
+        </header>
+
+        <div class="main-content">
+            <div class="card">
+                <h2>Desenhe aqui</h2>
+                <div class="canvas-container">
+                    <canvas id="canvas" width="280" height="280"></canvas>
+                    <div class="buttons">
+                        <button class="btn-primary" onclick="predict()">Reconhecer</button>
+                        <button class="btn-secondary" onclick="clearCanvas()">Limpar</button>
+                    </div>
+                </div>
+
+                <div class="instructions">
+                    <h3>Como usar:</h3>
+                    <ul>
+                        <li>Desenhe um digito (0-9) na area branca</li>
+                        <li>Tente desenhar grande e centralizado</li>
+                        <li>Clique em "Reconhecer" para ver o resultado</li>
+                        <li>Use "Limpar" para desenhar novamente</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Resultado</h2>
+                <div class="result-display">
+                    <div id="loading" class="loading">
+                        <div class="spinner"></div>
+                        <p>Analisando...</p>
+                    </div>
+
+                    <div id="result">
+                        <p class="placeholder">Desenhe um numero e clique em "Reconhecer"</p>
+                    </div>
+
+                    <div id="probabilities" class="probability-bars" style="display: none;">
+                        <!-- Preenchido via JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        // Configurar canvas
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 15;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Event listeners para mouse
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        // Event listeners para touch
+        canvas.addEventListener('touchstart', handleTouchStart);
+        canvas.addEventListener('touchmove', handleTouchMove);
+        canvas.addEventListener('touchend', stopDrawing);
+
+        function startDrawing(e) {
+            isDrawing = true;
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.stroke();
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        function handleTouchStart(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            isDrawing = true;
+            lastX = touch.clientX - rect.left;
+            lastY = touch.clientY - rect.top;
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            if (!isDrawing) return;
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            [lastX, lastY] = [x, y];
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('result').innerHTML = '<p class="placeholder">Desenhe um numero e clique em "Reconhecer"</p>';
+            document.getElementById('probabilities').style.display = 'none';
+        }
+
+        async function predict() {
+            const loading = document.getElementById('loading');
+            const result = document.getElementById('result');
+            const probabilities = document.getElementById('probabilities');
+
+            loading.classList.add('active');
+            result.innerHTML = '';
+            probabilities.style.display = 'none';
+
+            try {
+                const imageData = canvas.toDataURL('image/png');
+
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ image: imageData })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    result.innerHTML = `<p style="color: #ff6b6b;">Erro: ${data.error}</p>`;
+                } else {
+                    const confidence = (data.confidence * 100).toFixed(1);
+                    result.innerHTML = `
+                        <div class="predicted-digit">${data.digit}</div>
+                        <div class="confidence">${confidence}% de certeza</div>
+                    `;
+
+                    // Mostrar barras de probabilidade
+                    let barsHTML = '';
+                    for (let i = 0; i < 10; i++) {
+                        const prob = (data.probabilities[i] * 100).toFixed(1);
+                        barsHTML += `
+                            <div class="prob-row">
+                                <span class="prob-label">${i}</span>
+                                <div class="prob-bar-container">
+                                    <div class="prob-bar" style="width: ${prob}%"></div>
+                                </div>
+                                <span class="prob-value">${prob}%</span>
+                            </div>
+                        `;
+                    }
+                    probabilities.innerHTML = barsHTML;
+                    probabilities.style.display = 'flex';
+                }
+            } catch (error) {
+                result.innerHTML = `<p style="color: #ff6b6b;">Erro de conexao. Verifique se o servidor esta rodando.</p>`;
+            }
+
+            loading.classList.remove('active');
+        }
+    </script>
+</body>
+</html>
